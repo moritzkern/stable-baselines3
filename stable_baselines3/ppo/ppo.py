@@ -5,12 +5,14 @@ import numpy as np
 import torch as th
 from gym import spaces
 from torch.nn import functional as F
+from loguru import logger
 
 from stable_baselines3.common.on_policy_algorithm import OnPolicyAlgorithm
 from stable_baselines3.common.policies import ActorCriticPolicy
 from stable_baselines3.common.type_aliases import GymEnv, MaybeCallback, Schedule
 from stable_baselines3.common.utils import explained_variance, get_schedule_fn
 
+import functools
 
 class PPO(OnPolicyAlgorithm):
     """
@@ -148,6 +150,8 @@ class PPO(OnPolicyAlgorithm):
         self.clip_range_vf = clip_range_vf
         self.target_kl = target_kl
 
+        self.count = 0
+
         if _init_setup_model:
             self._setup_model()
 
@@ -267,7 +271,26 @@ class PPO(OnPolicyAlgorithm):
         self._n_updates += self.n_epochs
         explained_var = explained_variance(self.rollout_buffer.values.flatten(), self.rollout_buffer.returns.flatten())
 
+        nw = self.policy.mlp_extractor.policy_net
+        
+        for name, layer in nw.named_modules():
+                        if isinstance(layer, th.nn.Linear):
+                            self.logger.record(f"{name}.weight", rgetattr(
+                                nw, f"{name}.weight"))
+                            self.logger.record(f"{name}.weight.grad", rgetattr(
+                                nw, f"{name}.weight.grad"))
+                            self.logger.record(f"{name}.bias", rgetattr(
+                                nw, f"{name}.bias"))
+                            self.logger.record(f"{name}.bias.grad", rgetattr(
+                                nw, f"{name}.bias.grad"))
+        
+        self.count += 1
+        #logger.debug(self.policy.optimizer.state_dict())
         # Logs
+        self.logger.record("train/gradient", 2)
+        for key, value in self.policy.optimizer.state_dict().items():
+            self.logger.record("train/gradient_"+key, value)    
+
         self.logger.record("train/entropy_loss", np.mean(entropy_losses))
         self.logger.record("train/policy_gradient_loss", np.mean(pg_losses))
         self.logger.record("train/value_loss", np.mean(value_losses))
@@ -307,3 +330,9 @@ class PPO(OnPolicyAlgorithm):
             eval_log_path=eval_log_path,
             reset_num_timesteps=reset_num_timesteps,
         )
+
+
+def rgetattr(obj, attr, *args):
+    def _getattr(obj, attr):
+        return getattr(obj, attr, *args)
+    return functools.reduce(_getattr, [obj] + attr.split('.'))
