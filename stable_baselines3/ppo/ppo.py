@@ -272,7 +272,7 @@ class PPO(OnPolicyAlgorithm):
         explained_var = explained_variance(self.rollout_buffer.values.flatten(), self.rollout_buffer.returns.flatten())
 
         nw = self.policy.mlp_extractor.policy_net
-        
+        print("HIIIIIIIIIIII")
         for name, layer in nw.named_modules():
                         if isinstance(layer, th.nn.Linear):
                             self.logger.record(f"{name}.weight", rgetattr(
@@ -283,14 +283,18 @@ class PPO(OnPolicyAlgorithm):
                                 nw, f"{name}.bias"))
                             self.logger.record(f"{name}.bias.grad", rgetattr(
                                 nw, f"{name}.bias.grad"))
-        
+
+        # self.game_state[self.lookup_dict_rev.get("which_reward")]
+        self.logger.record("game_state/which_reward_inventory_weight", self.env.get_attr("game_state", 0)[0][self.env.get_attr("lookup_dict_rev", 0)[0].get("which_reward")])
+        for type in ["inv_value", "backorder_value", "invalid_action", "reward"]:
+            self.logger.record(f"game_state/{type}", self.env.get_attr(type, 0)[0])
+        for type in ["inventory", "backorder"]:
+            for key, value in self.env.env_method(f"get_{type}", 0)[0].items():    
+                self.logger.record(f"game_state/{type}_{key}", value)
+        print("HALLLLLLLLO")
         self.count += 1
         #logger.debug(self.policy.optimizer.state_dict())
         # Logs
-        self.logger.record("train/gradient", 2)
-        for key, value in self.policy.optimizer.state_dict().items():
-            self.logger.record("train/gradient_"+key, value)    
-
         self.logger.record("train/entropy_loss", np.mean(entropy_losses))
         self.logger.record("train/policy_gradient_loss", np.mean(pg_losses))
         self.logger.record("train/value_loss", np.mean(value_losses))
