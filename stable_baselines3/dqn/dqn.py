@@ -11,6 +11,7 @@ from stable_baselines3.common.preprocessing import maybe_transpose
 from stable_baselines3.common.type_aliases import GymEnv, MaybeCallback, Schedule
 from stable_baselines3.common.utils import get_linear_fn, is_vectorized_observation, polyak_update
 from stable_baselines3.dqn.policies import DQNPolicy
+import functools
 
 
 class DQN(OffPolicyAlgorithm):
@@ -192,6 +193,27 @@ class DQN(OffPolicyAlgorithm):
         # Increase update counter
         self._n_updates += gradient_steps
 
+        for name, layer in self.policy.q_net.named_modules():
+                if isinstance(layer, th.nn.Linear):
+                    self.logger.record(f"{name}.weight", rgetattr(
+                        self.policy.q_net, f"{name}.weight"))
+                    # self.logger.record(f"{name}.weight.grad", rgetattr(
+                    #     self.policy.q_net, f"{name}.weight.grad"))
+                    self.logger.record(f"{name}.bias", rgetattr(
+                        self.policy.q_net, f"{name}.bias"))
+                    # self.logger.record(f"{name}.bias.grad", rgetattr(
+                    #     self.policy.q_net, f"{name}.bias.grad"))
+        for name, layer in self.policy.q_net_target.named_modules():
+                if isinstance(layer, th.nn.Linear):
+                    self.logger.record(f"{name}.weight", rgetattr(
+                        self.policy.q_net_target, f"{name}.weight"))
+                    # self.logger.record(f"{name}.weight.grad", rgetattr(
+                    #     self.policy.q_net_target, f"{name}.weight.grad"))
+                    self.logger.record(f"{name}.bias", rgetattr(
+                        self.policy.q_net_target, f"{name}.bias"))
+                    # self.logger.record(f"{name}.bias.grad", rgetattr(
+                    #     self.policy.q_net_target, f"{name}.bias.grad"))
+
         self.logger.record("train/n_updates", self._n_updates, exclude="tensorboard")
         self.logger.record("train/loss", np.mean(losses))
 
@@ -257,3 +279,9 @@ class DQN(OffPolicyAlgorithm):
         state_dicts = ["policy", "policy.optimizer"]
 
         return state_dicts, []
+
+
+def rgetattr(obj, attr, *args):
+    def _getattr(obj, attr):
+        return getattr(obj, attr, *args)
+    return functools.reduce(_getattr, [obj] + attr.split('.'))
